@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock AI Trader</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" />
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -41,6 +42,23 @@
     div {
       margin-top: 10px;
     }
+
+    table {
+      width: 80%;
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #3498db;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -50,7 +68,23 @@
     <div id="status">AI Status: Waiting</div>
     <div id="profit">Profit: $0</div>
     <div id="action">Last Action: None</div>
+    <div id="balance">Balance: $10000</div>
   </div>
+
+  <h2>Recent Trades</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Action</th>
+        <th>Price</th>
+        <th>Profit</th>
+        <th>Balance</th>
+        <th>AI Points</th>
+      </tr>
+    </thead>
+    <tbody id="tradeData"></tbody>
+  </table>
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -61,41 +95,72 @@
 
     let balance = 10000;
     let aiPoints = 0;
+    const portfolio = {};
+    const sp500 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']; // Add all S&P 500 tickers here
 
-    async function getMarketData() {
-      const response = await fetch('https://api.twelvedata.com/time_series?symbol=AAPL&interval=1min&apikey=85ca51f72c1248e09e045bb551c525c9');
+    async function getMarketData(symbol) {
+      const response = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1min&apikey=85ca51f72c1248e09e045bb551c525c9`);
       const data = await response.json();
       return parseFloat(data.values[0].close);
     }
 
-    async function logAction(action, price, profit) {
+    async function logAction(symbol, action, price, profit) {
       await supabase.from('ai_trades').insert([
-        { action, price, profit, balance, aiPoints }
+        { symbol, action, price, profit, balance, aiPoints }
       ]);
+      await fetchTrades();
     }
 
-    window.startTrading = async function() {
+    async function trade(symbol) {
+      const price = await getMarketData(symbol);
+      const action = Math.random() < 0.33 ? 'buy' : (Math.random() < 0.5 ? 'sell' : 'hold');
+      let profit = 0;
+
+      if (action === 'buy' && balance >= price) {
+        portfolio[symbol] = (portfolio[symbol] || 0) + 1;
+        balance -= price;
+      } else if (action === 'sell' && (portfolio[symbol] || 0) > 0) {
+        portfolio[symbol] -= 1;
+        balance += price;
+        profit = price - 100;
+      }
+
+      aiPoints += profit >= 0 ? profit : profit / 10;
+
+      document.getElementById('action').innerText = `Last Action: ${action} ${symbol}`;
+      document.getElementById('profit').innerText = `Profit: $${profit}`;
+      document.getElementById('status').innerText = `AI Status: ${aiPoints > 0 ? 'Winning' : 'Losing'}`;
+      document.getElementById('balance').innerText = `Balance: $${balance.toFixed(2)}`;
+
+      await logAction(symbol, action, price, profit);
+    }
+
+    async function fetchTrades() {
+      const { data } = await supabase.from('ai_trades').select('*').order('id', { ascending: false }).limit(10);
+      const tableBody = document.getElementById('tradeData');
+      tableBody.innerHTML = '';
+
+      data.forEach(trade => {
+        const row = `<tr>
+          <td>${trade.symbol}</td>
+          <td>${trade.action}</td>
+          <td>$${trade.price.toFixed(2)}</td>
+          <td>$${trade.profit.toFixed(2)}</td>
+          <td>$${trade.balance.toFixed(2)}</td>
+          <td>${trade.aiPoints.toFixed(2)}</td>
+        </tr>`;
+        tableBody.innerHTML += row;
+      });
+    }
+
+    async function startTrading() {
       document.getElementById('status').innerText = 'AI Status: Trading...';
+      await fetchTrades();
 
       setInterval(async () => {
-        const price = await getMarketData();
-        const action = Math.random() < 0.33 ? 'buy' : (Math.random() < 0.5 ? 'sell' : 'hold');
-        let profit = 0;
-
-        if (action === 'buy') {
-          balance -= price;
-        } else if (action === 'sell') {
-          balance += price;
-          profit = price - 100;
+        for (const symbol of sp500) {
+          await trade(symbol);
         }
-
-        aiPoints += profit >= 0 ? profit : profit / 10;
-
-        document.getElementById('action').innerText = `Last Action: ${action}`;
-        document.getElementById('profit').innerText = `Profit: $${profit}`;
-        document.getElementById('status').innerText = `AI Status: ${aiPoints > 0 ? 'Winning' : 'Losing'}`;
-
-        await logAction(action, price, profit);
       }, 60000); // Run every minute
     }
   </script>
