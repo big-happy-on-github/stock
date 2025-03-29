@@ -63,7 +63,7 @@
 <body>
   <h1>AI Stock Trader</h1>
   <div id="dashboard">
-    <button onclick="window.startTrading()">Start Trading</button>
+    <button onclick="startTrading()">Start Trading</button>
     <div id="status">AI Status: Waiting</div>
     <div id="profit">Profit: $0</div>
     <div id="action">Last Action: None</div>
@@ -162,6 +162,8 @@
         }
       }, 60000); // Run every minute
     }
+
+    window.startTrading = startTrading;
   </script>
 </body>
 </html>
