@@ -119,7 +119,7 @@
         const currentQValues = await this.predict(state);
         const targetQ = reward + discountFactor * maxNextQ;
         currentQValues[action] = (1 - learningRate) * currentQValues[action] + learningRate * targetQ;
-        await supabase.from('dqn_table').upsert({ state, ...currentQValues });
+        await supabase.from('dqn_table').upsert({ state, buy: currentQValues.buy, sell: currentQValues.sell, hold: currentQValues.hold });
       }
     }
 
